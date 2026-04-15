@@ -1,17 +1,22 @@
+# Isaac Gym Preview 3 linux bindings ship as gym_38.so → use Python 3.8.
+# numpy: >=1.21 for pyfqmr wheels; <2 keeps Isaac-era stacks predictable.
 name: adamimic
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - python=3.8
+  - pip
+  - "numpy>=1.21,<2"
+  - scipy>=1.5
+  - matplotlib
   - tensorboard
   - tqdm
-  - numpy=1.20.3
   - seaborn
   - GitPython
   - pydelatin
   - pyfqmr
   - hydra-core
-  - pip
   - wandb
   - pip:
     - git+https://github.com/KellerJordan/Muon

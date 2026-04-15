@@ -13,58 +13,116 @@ This is the official PyTorch implementation of the paper "[**Towards Adaptable H
   <img width="98%" src="docs/teaser_website.png" style="box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.3); border-radius: 4px;">
 </p>
 
-## 🛠️ Installation Instructions
-Clone this repository:
+## Installation
+
+### 1. Clone and conda environment
+
+Isaac Gym Preview 3 on Linux ships Python bindings such as `gym_38.so`, so this workflow uses **Python 3.8**.
+
 ```bash
 git clone https://github.com/InternRobotics/AdaMimic.git
 cd AdaMimic
-```
-Create a conda environment:
-```bash
-conda env create -f conda_env.yml 
+conda env create -f conda_env.yml
 conda activate adamimic
 ```
 
-Download and install [Isaac Gym](https://developer.nvidia.com/isaac-gym):
+### 2. Conda hook (Isaac Gym and `libpython`)
+
+Isaac Gym’s native library loads `libpython3.8.so.1.0` at runtime. Conda installs that library under `$CONDA_PREFIX/lib`, but the dynamic linker does not always search there. Install the bundled activation hook once per environment:
+
 ```bash
-cd isaacgym/python && pip install -e .
+bash scripts/install_conda_hooks.sh
+conda deactivate && conda activate adamimic
 ```
 
-Install rsl_rl (PPO implementation) and legged gym:
+Alternatively, for a single shell session only:
+
 ```bash
-cd rsl_rl && pip install -e . && cd .. 
-cd legged_gym &&  pip install -e . && cd .. 
+export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+```
+
+### 3. Isaac Gym, rsl_rl, legged_gym
+
+Download [Isaac Gym](https://developer.nvidia.com/isaac-gym) into `AdaMimic/isaacgym` (this repository expects the `isaacgym/python` layout next to `legged_gym`). Then:
+
+```bash
+cd isaacgym/python && pip install -e . && cd ../..
+cd rsl_rl && pip install -e . && cd ..
+cd legged_gym && pip install -e . && cd ..
+```
+
+The vendored `isaacgym` in this tree includes a small patch for **NumPy ≥ 1.24** (`np.float` → `np.float64` in `torch_utils.py`). If you replace `isaacgym` with a fresh NVIDIA zip, re-apply that one-line change if you see `module 'numpy' has no attribute 'float'`.
+
+### 4. Logging (Weights & Biases default)
+
+Training uses **Weights & Biases** by default. Set your entity or username before running:
+
+```bash
+export WANDB_USERNAME=your_wandb_entity_or_username
+```
+
+To use **TensorBoard only** (no W&B login), override on the canonical Hydra path (`algorithm.algo` is the source for the `algo` alias):
+
+```bash
+algorithm.algo.runner.logger=tensorboard
 ```
 
 ## Usage
-### Commands for AdaMimic
-Training stage 1:
-```bash
-python legged_gym/scripts/train.py +dataset=g1_dof27/${task} +algorithm=adamimic/stage1 
-```
-Here, `${task}` can be one of task in [this list](./legged_gym/legged_gym/configs/dataset/g1_dof27/).
 
-Training stage 2:
-```bash
-python legged_gym/scripts/train.py +dataset=g1_dof27/${task} +algorithm=adamimic/stage2 checkpoint_path=${path/to/stage1_ckpt} 
-```
-The `${path/to/stage1_ckpt} ` should be replaced with checkpoints trained in the stage 1.
+Training and play entrypoints live under **`legged_gym/legged_gym/scripts/`** (not `legged_gym/scripts/`).
 
-Play policies:
+Hydra requires **`robot`**, **`dataset`**, and **`algorithm`** overrides. For G1 27-DOF tasks, pass `+robot=g1_dof27` and a dataset such as `+dataset=g1_dof27/high_jump`.
+
+**VRAM:** the default `num_envs` (4096) targets large GPUs. On smaller GPUs, reduce it (example: `num_envs=256`).
+
+### AdaMimic training
+
+Stage 1 (example task `high_jump`):
+
 ```bash
-python legged_gym/scripts/play.py +dataset=g1_dof27/${task} +algorithm=adamimic/stage2 resume_path=${path/to/stage2_ckpt} 
+export WANDB_USERNAME=your_wandb_entity_or_username  # required for default W&B logging
+python legged_gym/legged_gym/scripts/train.py \
+  +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage1 \
+  num_envs=256
 ```
 
-### Commands for baselines
-Train baselines:
-```bash
-python legged_gym/scripts/train.py +dataset=g1_dof27/${task} +algorithm=${baseline}
-```
-All configurations of `${baseline} ` are implemented in [this folder](./legged_gym/legged_gym/configs/algorithm/).
+For TensorBoard only (no W&B), append `algorithm.algo.runner.logger=tensorboard` and skip `WANDB_USERNAME`.
 
-Play policies
+`python legged_gym/legged_gym/scripts/train.py +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage1 num_envs=256 algorithm.algo.runner.logger=tensorboard`
+
+Replace `high_jump` with any task under [legged_gym/legged_gym/configs/dataset/g1_dof27/](legged_gym/legged_gym/configs/dataset/g1_dof27/).
+
+Stage 2:
+
 ```bash
-python legged_gym/scripts/play.py +dataset=g1_dof27/${task} +algorithm=${baseline} resume_path=${path/to/baseline_ckpt} 
+export WANDB_USERNAME=your_wandb_entity_or_username
+python legged_gym/legged_gym/scripts/train.py \
+  +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage2 \
+  num_envs=256 checkpoint_path=/path/to/stage1_ckpt.pt
+```
+
+Play:
+
+```bash
+python legged_gym/legged_gym/scripts/play.py \
+  +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage2 \
+  resume_path=/path/to/stage2_ckpt.pt
+```
+
+### Baselines
+
+```bash
+export WANDB_USERNAME=your_wandb_entity_or_username
+python legged_gym/legged_gym/scripts/train.py \
+  +robot=g1_dof27 +dataset=g1_dof27/${task} +algorithm=${baseline} num_envs=256
+```
+
+Configurations for `${baseline}` are under [legged_gym/legged_gym/configs/algorithm/](legged_gym/legged_gym/configs/algorithm/). Use `algorithm.algo.runner.logger=tensorboard` on the command line if you prefer TensorBoard without W&B.
+
+```bash
+python legged_gym/legged_gym/scripts/play.py \
+  +robot=g1_dof27 +dataset=g1_dof27/${task} +algorithm=${baseline} \
+  resume_path=/path/to/baseline_ckpt.pt
 ```
 
 ## ✉️ Contact
