@@ -67,6 +67,12 @@ To use **TensorBoard only** (no W&B login), override on the canonical Hydra path
 algorithm.algo.runner.logger=tensorboard
 ```
 
+### Blackwell GPUs (RTX 50-series) and PyTorch
+
+If you see `CUDA capability sm_120 is not compatible with the current PyTorch installation` or `CUDA error: no kernel image is available for execution on the device`, your PyTorch build is too old for the GPU: CUDA 12.1 wheels (for example `2.4.1+cu121`) only ship kernels through **sm_90**, while RTX 50-series cards need **sm_120**.
+
+Install a recent PyTorch build with **CUDA 12.8 or newer** (the `cu128` index on [pytorch.org/get-started](https://pytorch.org/get-started/locally/)). Those releases require **Python 3.9 or newer**, so the interpreter version must match a native Isaac Gym module in `isaacgym/python/isaacgym/_bindings/linux-x86_64/` (for example `gym_310.so` for Python 3.10). If your Isaac Gym package only provides `gym_38.so`, you are limited to stacks that do not ship Blackwell-capable PyTorch for Python 3.8; resolving that requires a different GPU, an Isaac Gym build with bindings for a newer Python, or migrating off Isaac Gym Preview.
+
 ## Usage
 
 Training and play entrypoints live under **`legged_gym/legged_gym/scripts/`** (not `legged_gym/scripts/`).
@@ -88,7 +94,9 @@ python legged_gym/legged_gym/scripts/train.py \
 
 For TensorBoard only (no W&B), append `algorithm.algo.runner.logger=tensorboard` and skip `WANDB_USERNAME`.
 
-`python legged_gym/legged_gym/scripts/train.py +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage1 num_envs=256 algorithm.algo.runner.logger=tensorboard`
+```bash
+python legged_gym/legged_gym/scripts/train.py +robot=g1_dof27 +dataset=g1_dof27/high_jump +algorithm=adamimic/stage1 num_envs=256 algorithm.algo.runner.logger=tensorboard
+```
 
 Replace `high_jump` with any task under [legged_gym/legged_gym/configs/dataset/g1_dof27/](legged_gym/legged_gym/configs/dataset/g1_dof27/).
 
